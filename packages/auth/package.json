@@ -1,0 +1,25 @@
+{
+  "name": "@orys/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "@orys/db": "workspace:*",
+    "@orys/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@orys/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

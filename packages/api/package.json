@@ -1,0 +1,25 @@
+{
+  "name": "@orys/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "@orys/auth": "workspace:*",
+    "@orys/db": "workspace:*",
+    "@orys/env": "workspace:*",
+    "elysia": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@orys/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -13,7 +13,7 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/api/package.json ./packages/api/
 
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # --- Build ---
 FROM base AS build

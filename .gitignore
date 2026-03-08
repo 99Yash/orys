@@ -38,6 +38,7 @@ lerna-debug.log*
 
 # Next.js
 .next
+next-env.d.ts
 
 # Testing
 coverage

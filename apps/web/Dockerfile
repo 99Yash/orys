@@ -17,18 +17,9 @@ RUN bun install
 
 # --- Build ---
 FROM base AS build
-RUN npm install -g bun@1.3.2
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages/config/node_modules ./packages/config/node_modules 2>/dev/null || true
-COPY --from=deps /app/packages/env/node_modules ./packages/env/node_modules
-COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
-COPY --from=deps /app/packages/auth/node_modules ./packages/auth/node_modules
-COPY --from=deps /app/packages/api/node_modules ./packages/api/node_modules
-
-COPY package.json bun.lock ./
+COPY --from=deps /app ./
 COPY apps/web ./apps/web
 COPY packages ./packages
 

@@ -8,6 +8,13 @@
       "when": 1772937747760,
       "tag": "0000_steady_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774007269684,
+      "tag": "0001_curvy_katie_power",
+      "breakpoints": true
     }
   ]
 }

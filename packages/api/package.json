@@ -15,6 +15,7 @@
     "@orys/auth": "workspace:*",
     "@orys/db": "workspace:*",
     "@orys/env": "workspace:*",
+    "drizzle-orm": "^0.45.1",
     "elysia": "catalog:",
     "zod": "catalog:"
   },

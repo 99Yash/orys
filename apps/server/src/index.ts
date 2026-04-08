@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { app } from "@orys/api";
 import { env } from "@orys/env/server";
 import { Elysia } from "elysia";
+import { wsPlugin } from "./realtime/ws";
 
 const server = new Elysia()
   .use(
@@ -14,6 +15,7 @@ const server = new Elysia()
     }),
   )
   .use(app)
+  .use(wsPlugin)
   .listen(3001, () => {
     console.log("Server is running on http://localhost:3001");
   });

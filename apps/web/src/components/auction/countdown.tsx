@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { cn } from "../../lib/utils";
+import { cn } from "~/lib/utils";
 
 function parseTime(ms: number) {
   if (ms <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
@@ -22,13 +22,33 @@ function formatTimeLeft(ms: number): string {
   return `${seconds}s`;
 }
 
-function TimeUnit({ value, label }: { value: number; label: string }) {
+function TimeUnit({
+  value,
+  label,
+  size = "default",
+}: {
+  value: number;
+  label: string;
+  size?: "default" | "compact";
+}) {
   return (
     <span className="tabular-nums">
-      <span className="text-2xl font-bold text-foreground">
+      <span
+        className={cn(
+          "font-bold text-foreground",
+          size === "compact" ? "text-base" : "text-2xl",
+        )}
+      >
         {String(value).padStart(2, "0")}
       </span>
-      <span className="ml-0.5 text-xs text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "text-muted-foreground",
+          size === "compact" ? "ml-0.5 text-[10px]" : "ml-0.5 text-xs",
+        )}
+      >
+        {label}
+      </span>
     </span>
   );
 }
@@ -38,7 +58,7 @@ export function Countdown({
   variant = "inline",
 }: {
   endsAt: string;
-  variant?: "inline" | "segmented";
+  variant?: "inline" | "segmented" | "compact";
 }) {
   const [timeLeft, setTimeLeft] = useState(() =>
     new Date(endsAt).getTime() - Date.now(),
@@ -53,16 +73,26 @@ export function Countdown({
 
   const isUrgent = timeLeft > 0 && timeLeft < 180_000;
 
-  if (variant === "segmented") {
+  if (variant === "segmented" || variant === "compact") {
     if (timeLeft <= 0) {
       return (
-        <p className="text-sm font-medium text-muted-foreground">
+        <p
+          className={cn(
+            "font-medium text-muted-foreground",
+            variant === "compact" ? "text-xs" : "text-sm",
+          )}
+        >
           Auction ended
         </p>
       );
     }
 
     const { days, hours, minutes, seconds } = parseTime(timeLeft);
+    const unitSize = variant === "compact" ? "compact" : "default";
+    const separatorClass = cn(
+      "text-border",
+      variant === "compact" ? "mx-0.5 text-sm" : "mx-0.5 text-lg",
+    );
 
     return (
       <div
@@ -73,15 +103,15 @@ export function Countdown({
       >
         {days > 0 && (
           <>
-            <TimeUnit value={days} label="d" />
-            <span className="mx-0.5 text-lg text-border">:</span>
+            <TimeUnit value={days} label="d" size={unitSize} />
+            <span className={separatorClass}>:</span>
           </>
         )}
-        <TimeUnit value={hours} label="h" />
-        <span className="mx-0.5 text-lg text-border">:</span>
-        <TimeUnit value={minutes} label="m" />
-        <span className="mx-0.5 text-lg text-border">:</span>
-        <TimeUnit value={seconds} label="s" />
+        <TimeUnit value={hours} label="h" size={unitSize} />
+        <span className={separatorClass}>:</span>
+        <TimeUnit value={minutes} label="m" size={unitSize} />
+        <span className={separatorClass}>:</span>
+        <TimeUnit value={seconds} label="s" size={unitSize} />
       </div>
     );
   }

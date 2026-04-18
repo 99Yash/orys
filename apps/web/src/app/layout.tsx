@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Toaster } from "~/components/ui/sonner";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         {children}
+        <Toaster />
       </body>
     </html>
   );

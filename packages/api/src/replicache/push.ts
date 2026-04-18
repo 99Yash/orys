@@ -19,6 +19,7 @@ import {
   quoteWithdraw,
   listingEndNow,
   listingAward,
+  expireListings,
   AuctionError,
 } from "../auction/service";
 
@@ -147,6 +148,7 @@ export async function handlePush(
     try {
       await db.transaction(
         async (tx) => {
+          await expireListings(tx as unknown as Tx);
           await processMutation(
             tx as unknown as Tx,
             body.clientGroupID,

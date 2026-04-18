@@ -3,7 +3,7 @@
  * All mutations run inside a serializable Drizzle transaction.
  */
 
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, ne, lt, sql, desc } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { listing, quote } from "@orys/db/schema";
 import type * as schema from "@orys/db/schema";
@@ -21,6 +21,26 @@ export class AuctionError extends Error {
     super(message);
     this.name = "AuctionError";
   }
+}
+
+/**
+ * Transition all expired LIVE listings to ENDED.
+ * Call this inside a serializable transaction before reading listing state.
+ * Returns the number of listings transitioned.
+ */
+export async function expireListings(tx: Tx): Promise<number> {
+  const result = await tx
+    .update(listing)
+    .set({
+      status: "ENDED",
+      rowVersion: sql`${listing.rowVersion} + 1`,
+    })
+    .where(
+      and(eq(listing.status, "LIVE"), lt(listing.endsAt, new Date())),
+    )
+    .returning({ id: listing.id });
+
+  return result.length;
 }
 
 export async function listingCreate(
@@ -99,12 +119,16 @@ export async function quoteUpsert(
   if (row.ownerId === userId)
     throw new AuctionError("SELF_BID", "Cannot bid on own listing");
 
-  // 2. Validate improvement over current best
+  // 2. Validate improvement over current best (excluding user's own bid)
   const [bestQuote] = await tx
     .select({ amountCents: quote.amountCents })
     .from(quote)
     .where(
-      and(eq(quote.listingId, args.listingId), eq(quote.status, "ACTIVE")),
+      and(
+        eq(quote.listingId, args.listingId),
+        eq(quote.status, "ACTIVE"),
+        ne(quote.userId, userId),
+      ),
     )
     .orderBy(desc(quote.amountCents))
     .limit(1);
@@ -149,6 +173,7 @@ export async function quoteUpsert(
   }
 
   // 4. Anti-snipe: extend listing if bid within threshold of end
+  //    Otherwise just bump rowVersion for card/feed updates
   const timeUntilEnd = row.endsAt.getTime() - Date.now();
   if (timeUntilEnd > 0 && timeUntilEnd < ANTI_SNIPE_THRESHOLD_MS) {
     const newEndsAt = new Date(Date.now() + ANTI_SNIPE_EXTENSION_MS);
@@ -159,13 +184,12 @@ export async function quoteUpsert(
         rowVersion: sql`${listing.rowVersion} + 1`,
       })
       .where(eq(listing.id, args.listingId));
+  } else {
+    await tx
+      .update(listing)
+      .set({ rowVersion: sql`${listing.rowVersion} + 1` })
+      .where(eq(listing.id, args.listingId));
   }
-
-  // 5. Bump listing rowVersion for card/feed updates
-  await tx
-    .update(listing)
-    .set({ rowVersion: sql`${listing.rowVersion} + 1` })
-    .where(eq(listing.id, args.listingId));
 }
 
 export async function quoteWithdraw(

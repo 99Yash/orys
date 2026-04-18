@@ -81,17 +81,23 @@ export const auctionMutators = {
       amountCents: number;
     },
   ) {
+    // Check if the user already has a quote for this listing (update vs new)
+    const existingQuote = await tx.get(`my-quote/${args.listingId}`);
+    const isUpdate = existingQuote !== undefined;
+
     // Optimistic: update my-quote
     await tx.set(`my-quote/${args.listingId}`, {
       quoteId: args.quoteId,
       listingId: args.listingId,
       amountCents: args.amountCents,
       status: "ACTIVE",
-      createdAt: new Date().toISOString(),
+      createdAt: isUpdate
+        ? ((existingQuote as Record<string, unknown>).createdAt as string)
+        : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
-    // Optimistic: update card best amount
+    // Optimistic: update card best amount (only increment count for new quotes)
     const card = (await tx.get(`card/${args.listingId}`)) as Record<
       string,
       unknown
@@ -102,7 +108,7 @@ export const auctionMutators = {
       await tx.set(`card/${args.listingId}`, {
         ...card,
         bestAmountCents: Math.max(currentBest, args.amountCents),
-        quoteCount: currentCount + 1,
+        quoteCount: isUpdate ? currentCount : currentCount + 1,
         updatedAt: new Date().toISOString(),
       });
     }

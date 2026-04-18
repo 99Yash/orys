@@ -20,6 +20,7 @@ import {
 } from "./cvr";
 import * as cvrCache from "./cache";
 import { IDB } from "./idb-keys";
+import { expireListings } from "../auction/service";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@orys/db/schema";
 
@@ -92,6 +93,9 @@ export async function handlePull(
   const result = await db.transaction(
     async (rawTx) => {
       const tx = rawTx as unknown as Tx;
+
+      // 0. Expire LIVE listings past their endsAt
+      await expireListings(tx);
 
       // 1. Get or create client group (only for authenticated users)
       let cvrVersion = 0;
@@ -250,7 +254,7 @@ export async function handlePull(
           value: buildListingDoc(row, stats),
         });
 
-        // Leaderboard
+        // Leaderboard: rebuild and clean up stale ranks
         const lbQuotes = await tx
           .select()
           .from(quote)
@@ -265,6 +269,15 @@ export async function handlePull(
             op: "put",
             key: IDB.leaderboard(row.id, String(i + 1)),
             value: buildLeaderboardDoc(lbQuotes[i]!, i + 1, isOwner),
+          });
+        }
+        // Delete stale ranks beyond current count.
+        // Replicache treats del on non-existent keys as no-ops.
+        // Clean up a bounded window to cover typical auction sizes.
+        for (let i = lbQuotes.length + 1; i <= lbQuotes.length + 20; i++) {
+          patch.push({
+            op: "del",
+            key: IDB.leaderboard(row.id, String(i)),
           });
         }
       }

@@ -9,9 +9,14 @@ import { Countdown } from "../../../components/auction/countdown";
 import { BidForm } from "../../../components/auction/bid-form";
 import { Leaderboard } from "../../../components/auction/leaderboard";
 import { PresenceCount } from "../../../components/auction/presence";
+import { ListingStatusBadge } from "~/components/auction/listing-status-badge";
+import { ListingStatusBar } from "~/components/auction/listing-status-bar";
+import { DetailsAccordion } from "~/components/auction/details-accordion";
 import { Header } from "../../../components/layout/header";
 import { Footer } from "../../../components/layout/footer";
-import { cn, formatCents } from "../../../lib/utils";
+import { Button } from "~/components/ui/button";
+import { Separator } from "~/components/ui/separator";
+import { formatCents } from "../../../lib/utils";
 import * as ws from "../../../lib/realtime/socket";
 
 type ListingDoc = {
@@ -25,6 +30,8 @@ type ListingDoc = {
   minStepCents: number;
   currency: string;
   ownerId: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type MyQuoteDoc = {
@@ -32,29 +39,6 @@ type MyQuoteDoc = {
   listingId: string;
   amountCents: number;
   status: string;
-};
-
-const statusConfig: Record<
-  string,
-  { label: string; dot?: boolean; className: string }
-> = {
-  DRAFT: {
-    label: "Draft",
-    className: "bg-foreground/[0.06] text-muted-foreground",
-  },
-  LIVE: {
-    label: "Live",
-    dot: true,
-    className: "bg-emerald-500/10 text-emerald-700",
-  },
-  ENDED: {
-    label: "Ended",
-    className: "bg-foreground/[0.06] text-muted-foreground",
-  },
-  AWARDED: {
-    label: "Awarded",
-    className: "bg-brand/10 text-brand",
-  },
 };
 
 function LoadingSkeleton() {
@@ -115,7 +99,6 @@ function ListingDetail({
   const isLive = listing.status === "LIVE";
   const isEnded = listing.status === "ENDED";
   const isAuthed = userId !== null;
-  const status = statusConfig[listing.status] ?? statusConfig.DRAFT!;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -127,26 +110,18 @@ function ListingDetail({
         &larr; Back to auctions
       </Link>
 
+      {/* Status bar */}
+      <div className="mb-6">
+        <ListingStatusBar currentStatus={listing.status} />
+      </div>
+
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
         {/* Main content */}
         <div className="space-y-6 lg:col-span-3">
           {/* Title section */}
           <div>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                  status.className,
-                )}
-              >
-                {status.dot && (
-                  <span className="relative flex size-1.5">
-                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-                    <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-                  </span>
-                )}
-                {status.label}
-              </span>
+              <ListingStatusBadge status={listing.status} />
               {isLive && <PresenceCount listingId={listingId} />}
             </div>
 
@@ -161,7 +136,7 @@ function ListingDetail({
             )}
           </div>
 
-          <hr className="border-border" />
+          <Separator />
 
           {/* Leaderboard */}
           <div>
@@ -171,8 +146,23 @@ function ListingDetail({
             <Leaderboard
               listingId={listingId}
               canAward={isOwner && isEnded}
+              isOwner={isOwner}
+              userId={userId}
             />
           </div>
+
+          <Separator />
+
+          {/* Details accordion */}
+          <DetailsAccordion
+            listing={{
+              description: listing.description,
+              minStepCents: listing.minStepCents,
+              currency: listing.currency,
+              createdAt: listing.createdAt,
+              updatedAt: listing.updatedAt,
+            }}
+          />
         </div>
 
         {/* Sidebar */}
@@ -260,13 +250,13 @@ function ListingDetail({
 
             {/* Owner: end auction */}
             {isOwner && isLive && (
-              <button
-                type="button"
+              <Button
+                variant="destructive"
+                className="w-full"
                 onClick={() => rep?.mutate.listingEndNow({ listingId })}
-                className="w-full rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
               >
                 End Auction Now
-              </button>
+              </Button>
             )}
 
             {/* Owner: award prompt */}

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { cn, formatCents } from "../../lib/utils";
+import { cn, formatCents } from "~/lib/utils";
 import { Countdown } from "./countdown";
+import { Skeleton } from "~/components/ui/skeleton";
 
 type CardDoc = {
   id: string;
@@ -45,10 +46,38 @@ function cardAccent(id: string): string {
   return `linear-gradient(135deg, hsl(${hue} 35% 94%) 0%, hsl(${(hue + 45) % 360} 30% 91%) 100%)`;
 }
 
-export function ListingCard({ card }: { card: CardDoc }) {
+function ListingCardSkeleton() {
+  return (
+    <div className="flex size-full flex-col overflow-hidden rounded-xl border border-border/80 bg-background">
+      <Skeleton className="aspect-[16/9] rounded-none" />
+      <div className="flex flex-1 flex-col justify-between gap-3 p-4">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <div className="flex items-end justify-between gap-2">
+          <div className="space-y-1">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-6 w-24" />
+          </div>
+          <Skeleton className="h-4 w-12" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListingCardComponent({
+  card,
+  userId,
+}: {
+  card: CardDoc;
+  userId?: string | null;
+}) {
   const isActive = card.status === "LIVE";
   const status = statusConfig[card.status] ?? statusConfig.DRAFT!;
   const hasBids = card.bestAmountCents > 0;
+  const isOwner = userId != null && card.ownerId === userId;
 
   return (
     <Link
@@ -70,8 +99,8 @@ export function ListingCard({ card }: { card: CardDoc }) {
           {card.title.charAt(0).toUpperCase()}
         </span>
 
-        {/* Status pill */}
-        <div className="absolute left-3 top-3">
+        {/* Top row: status + owner badge */}
+        <div className="absolute left-3 right-3 top-3 flex items-center justify-between">
           <span
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium",
@@ -86,13 +115,19 @@ export function ListingCard({ card }: { card: CardDoc }) {
             )}
             {status.label}
           </span>
+
+          {isOwner && (
+            <span className="inline-flex items-center rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
+              Your Listing
+            </span>
+          )}
         </div>
 
         {/* Countdown chip */}
         {isActive && (
           <div className="absolute bottom-3 left-3">
             <span className="inline-flex items-center rounded-md bg-background/80 px-2 py-1 text-xs font-medium text-foreground backdrop-blur-sm">
-              <Countdown endsAt={card.endsAt} />
+              <Countdown endsAt={card.endsAt} variant="compact" />
             </span>
           </div>
         )}
@@ -131,3 +166,9 @@ export function ListingCard({ card }: { card: CardDoc }) {
     </Link>
   );
 }
+
+export const ListingCard = Object.assign(ListingCardComponent, {
+  Skeleton: ListingCardSkeleton,
+});
+
+export type { CardDoc };

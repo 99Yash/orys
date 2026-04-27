@@ -1,14 +1,12 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { authClient } from "~/lib/auth-client";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { Button } from '~/components/ui/button';
 import {
   Form,
   FormControl,
@@ -16,11 +14,13 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "~/components/ui/form";
+} from '~/components/ui/form';
+import { Input } from '~/components/ui/input';
+import { authClient } from '~/lib/auth-client';
 
 const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
@@ -32,8 +32,8 @@ export function LoginForm() {
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
-      password: "",
+      email: '',
+      password: '',
     },
   });
 
@@ -46,7 +46,7 @@ export function LoginForm() {
       password: values.password,
     });
     if (result.error) {
-      setError(result.error.message ?? "Sign in failed. Please try again.");
+      setError(result.error.message ?? 'Sign in failed. Please try again.');
     }
   }
 
@@ -89,7 +89,7 @@ export function LoginForm() {
                 <FormControl>
                   <div className="relative">
                     <Input
-                      type={showPassword ? "text" : "password"}
+                      type={showPassword ? 'text' : 'password'}
                       placeholder="Enter your password"
                       autoComplete="current-password"
                       className="pr-10"
@@ -101,7 +101,7 @@ export function LoginForm() {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       tabIndex={-1}
                       aria-label={
-                        showPassword ? "Hide password" : "Show password"
+                        showPassword ? 'Hide password' : 'Show password'
                       }
                     >
                       {showPassword ? (
@@ -134,9 +134,9 @@ export function LoginForm() {
       </Form>
 
       <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
+        Don&apos;t have an account?{' '}
         <Link
-          href={"/register" as never}
+          href={'/register' as never}
           className="font-medium text-brand hover:text-brand/80"
         >
           Create an account

@@ -1,15 +1,13 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { authClient } from "~/lib/auth-client";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Checkbox } from "~/components/ui/checkbox";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { Button } from '~/components/ui/button';
+import { Checkbox } from '~/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -17,23 +15,25 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "~/components/ui/form";
+} from '~/components/ui/form';
+import { Input } from '~/components/ui/input';
+import { authClient } from '~/lib/auth-client';
 
 const registerSchema = z
   .object({
-    name: z.string().min(2, "Name must be at least 2 characters"),
-    email: z.string().email("Please enter a valid email address"),
+    name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.email('Please enter a valid email address'),
     password: z
       .string()
-      .min(8, "Password must be at least 8 characters")
-      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .regex(/[0-9]/, "Password must contain at least one number"),
-    confirmPassword: z.string().min(1, "Please confirm your password"),
-    terms: z.literal(true, { message: "You must accept the terms" }),
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/[0-9]/, 'Password must contain at least one number'),
+    confirmPassword: z.string().min(1, 'Please confirm your password'),
+    terms: z.literal(true, { message: 'You must accept the terms' }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
   });
 
 type RegisterValues = z.infer<typeof registerSchema>;
@@ -46,10 +46,10 @@ export function RegisterForm() {
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
       terms: false as unknown as true,
     },
   });
@@ -65,7 +65,7 @@ export function RegisterForm() {
     });
     if (result.error) {
       setError(
-        result.error.message ?? "Registration failed. Please try again.",
+        result.error.message ?? 'Registration failed. Please try again.',
       );
     }
   }
@@ -129,7 +129,7 @@ export function RegisterForm() {
                 <FormControl>
                   <div className="relative">
                     <Input
-                      type={showPassword ? "text" : "password"}
+                      type={showPassword ? 'text' : 'password'}
                       placeholder="Create a password"
                       autoComplete="new-password"
                       className="pr-10"
@@ -141,7 +141,7 @@ export function RegisterForm() {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       tabIndex={-1}
                       aria-label={
-                        showPassword ? "Hide password" : "Show password"
+                        showPassword ? 'Hide password' : 'Show password'
                       }
                     >
                       {showPassword ? (
@@ -169,7 +169,7 @@ export function RegisterForm() {
                 <FormControl>
                   <div className="relative">
                     <Input
-                      type={showConfirm ? "text" : "password"}
+                      type={showConfirm ? 'text' : 'password'}
                       placeholder="Confirm your password"
                       autoComplete="new-password"
                       className="pr-10"
@@ -181,7 +181,7 @@ export function RegisterForm() {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       tabIndex={-1}
                       aria-label={
-                        showConfirm ? "Hide password" : "Show password"
+                        showConfirm ? 'Hide password' : 'Show password'
                       }
                     >
                       {showConfirm ? (
@@ -211,16 +211,16 @@ export function RegisterForm() {
                     />
                   </FormControl>
                   <FormLabel className="text-sm font-normal leading-snug text-muted-foreground">
-                    I agree to the{" "}
+                    I agree to the{' '}
                     <Link
-                      href={"/terms" as never}
+                      href={'/terms' as never}
                       className="font-medium text-brand hover:text-brand/80"
                     >
                       Terms of Service
-                    </Link>{" "}
-                    and{" "}
+                    </Link>{' '}
+                    and{' '}
                     <Link
-                      href={"/privacy" as never}
+                      href={'/privacy' as never}
                       className="font-medium text-brand hover:text-brand/80"
                     >
                       Privacy Policy
@@ -249,9 +249,9 @@ export function RegisterForm() {
       </Form>
 
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
+        Already have an account?{' '}
         <Link
-          href={"/login" as never}
+          href={'/login' as never}
           className="font-medium text-brand hover:text-brand/80"
         >
           Sign in

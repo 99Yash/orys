@@ -4,17 +4,7 @@ import Link from "next/link";
 import { cn, formatCents } from "~/lib/utils";
 import { Countdown } from "./countdown";
 import { Skeleton } from "~/components/ui/skeleton";
-
-type CardDoc = {
-  id: string;
-  title: string;
-  status: string;
-  bestAmountCents: number;
-  quoteCount: number;
-  endsAt: string;
-  currency: string;
-  ownerId: string;
-};
+import type { CardDoc } from "~/lib/auction/managers";
 
 const statusConfig: Record<
   string,
@@ -170,5 +160,3 @@ function ListingCardComponent({
 export const ListingCard = Object.assign(ListingCardComponent, {
   Skeleton: ListingCardSkeleton,
 });
-
-export type { CardDoc };

@@ -1,5 +1,5 @@
 {
-  "name": "@orys/api",
+  "name": "@orys/auction-core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,15 +10,6 @@
     "./*": {
       "default": "./src/*.ts"
     }
-  },
-  "dependencies": {
-    "@orys/auction-core": "workspace:*",
-    "@orys/auth": "workspace:*",
-    "@orys/db": "workspace:*",
-    "@orys/env": "workspace:*",
-    "drizzle-orm": "^0.45.1",
-    "elysia": "catalog:",
-    "zod": "catalog:"
   },
   "devDependencies": {
     "@orys/config": "workspace:*",

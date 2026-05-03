@@ -25,6 +25,44 @@ import {
 
 type Tx = NodePgDatabase<typeof schema>;
 
+// Postgres error codes safe to retry: serialization_failure + deadlock_detected
+const RETRYABLE_PG_CODES = new Set(["40001", "40P01"]);
+const MAX_TX_ATTEMPTS = 20;
+
+function isRetryablePgError(err: unknown): boolean {
+  // Drizzle wraps the pg error: thrown is `new Error("Failed query: ...")`
+  // with the original pg error (carrying `code: "40001"`) on `.cause`.
+  // Walk the chain to find the underlying code.
+  let cur: unknown = err;
+  for (let depth = 0; cur && typeof cur === "object" && depth < 5; depth++) {
+    const code = (cur as { code?: unknown }).code;
+    if (typeof code === "string" && RETRYABLE_PG_CODES.has(code)) return true;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/**
+ * Run a transaction-bearing function and retry only on Postgres
+ * serialization/deadlock failures. Domain errors (AuctionError) and any
+ * other non-retryable error short-circuit immediately.
+ */
+async function runWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < MAX_TX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isRetryablePgError(err)) throw err;
+      lastErr = err;
+      // Jittered exponential backoff capped at 200ms
+      const delay = Math.min(5 * 2 ** attempt, 200) + Math.random() * 5;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 type MutationError = {
   name: string;
   code: string;
@@ -62,19 +100,18 @@ async function processMutation(
   mutation: Mutation,
   errorMode: boolean,
 ): Promise<void> {
-  // 1. Get or create client group
+  // 1. Ensure client group exists (idempotent upsert; preserves cvrVersion)
+  await tx
+    .insert(replicacheClientGroup)
+    .values({ id: clientGroupID, userId, cvrVersion: 0 })
+    .onConflictDoNothing();
+
   const [group] = await tx
     .select()
     .from(replicacheClientGroup)
     .where(eq(replicacheClientGroup.id, clientGroupID));
 
-  if (!group) {
-    await tx.insert(replicacheClientGroup).values({
-      id: clientGroupID,
-      userId,
-      cvrVersion: 0,
-    });
-  } else if (group.userId !== userId) {
+  if (group && group.userId !== userId) {
     throw new Error("Client group belongs to different user");
   }
 
@@ -108,19 +145,18 @@ async function processMutation(
     await mutator(tx, userId, mutation.args);
   }
 
-  // 6. Advance cursor (always, even in error mode)
-  if (client) {
-    await tx
-      .update(replicacheClient)
-      .set({ lastMutationId: nextMutationId })
-      .where(eq(replicacheClient.id, mutation.clientID));
-  } else {
-    await tx.insert(replicacheClient).values({
+  // 6. Advance cursor (always, even in error mode) via idempotent upsert
+  await tx
+    .insert(replicacheClient)
+    .values({
       id: mutation.clientID,
       clientGroupId: clientGroupID,
       lastMutationId: nextMutationId,
+    })
+    .onConflictDoUpdate({
+      target: replicacheClient.id,
+      set: { lastMutationId: nextMutationId },
     });
-  }
 }
 
 function extractListingId(args: unknown): string | undefined {
@@ -146,38 +182,44 @@ export async function handlePush(
     const listingId = extractListingId(mutation.args);
 
     try {
-      await db.transaction(
-        async (tx) => {
-          await expireListings(tx as unknown as Tx);
-          await processMutation(
-            tx as unknown as Tx,
-            body.clientGroupID,
-            userId,
-            mutation,
-            false,
-          );
-        },
-        { isolationLevel: "serializable" },
-      );
-
-      if (listingId) affectedListingIds.add(listingId);
-    } catch (error) {
-      // Error mode: advance cursor without applying mutation
-      try {
-        await db.transaction(
+      await runWithRetry(() =>
+        db.transaction(
           async (tx) => {
+            await expireListings(tx as unknown as Tx);
             await processMutation(
               tx as unknown as Tx,
               body.clientGroupID,
               userId,
               mutation,
-              true,
+              false,
             );
           },
           { isolationLevel: "serializable" },
+        ),
+      );
+
+      if (listingId) affectedListingIds.add(listingId);
+    } catch (error) {
+      // Error mode: advance cursor without applying mutation.
+      // Read-committed is sufficient and avoids predicate-lock 40001s —
+      // all writes here are idempotent (ON CONFLICT upserts).
+      try {
+        await runWithRetry(() =>
+          db.transaction(
+            async (tx) => {
+              await processMutation(
+                tx as unknown as Tx,
+                body.clientGroupID,
+                userId,
+                mutation,
+                true,
+              );
+            },
+            { isolationLevel: "read committed" },
+          ),
         );
       } catch {
-        // If even error-mode fails, we can't advance the cursor
+        // If even error-mode fails after retries, we can't advance the cursor.
         console.error("Error-mode mutation failed:", error);
       }
 
@@ -186,6 +228,12 @@ export async function handlePush(
           name: mutation.name,
           code: error.code,
           message: error.message,
+        });
+      } else if (isRetryablePgError(error)) {
+        errors.push({
+          name: mutation.name,
+          code: "CONTENTION",
+          message: "Listing is busy, please retry",
         });
       } else {
         errors.push({

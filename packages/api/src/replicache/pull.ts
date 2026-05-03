@@ -19,7 +19,7 @@ import {
   getDelsSince,
 } from "./cvr";
 import * as cvrCache from "./cache";
-import { IDB } from "./idb-keys";
+import { IDB_KEY } from "@orys/auction-core";
 import { expireListings } from "../auction/service";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@orys/db/schema";
@@ -237,20 +237,20 @@ export async function handlePull(
       }
 
       for (const id of listingDels) {
-        patch.push({ op: "del", key: IDB.card(id) });
-        patch.push({ op: "del", key: IDB.listing(id) });
+        patch.push({ op: "del", key: IDB_KEY.CARD({ listingId: id }) });
+        patch.push({ op: "del", key: IDB_KEY.LISTING({ listingId: id }) });
       }
 
       for (const row of listingRows) {
         const stats = quoteStatsMap.get(row.id) ?? defaultStats;
         patch.push({
           op: "put",
-          key: IDB.card(row.id),
+          key: IDB_KEY.CARD({ listingId: row.id }),
           value: buildCardDoc(row, stats),
         });
         patch.push({
           op: "put",
-          key: IDB.listing(row.id),
+          key: IDB_KEY.LISTING({ listingId: row.id }),
           value: buildListingDoc(row, stats),
         });
 
@@ -267,7 +267,10 @@ export async function handlePull(
         for (let i = 0; i < lbQuotes.length; i++) {
           patch.push({
             op: "put",
-            key: IDB.leaderboard(row.id, String(i + 1)),
+            key: IDB_KEY.LEADERBOARD({
+              listingId: row.id,
+              rank: String(i + 1),
+            }),
             value: buildLeaderboardDoc(lbQuotes[i]!, i + 1, isOwner),
           });
         }
@@ -277,22 +280,25 @@ export async function handlePull(
         for (let i = lbQuotes.length + 1; i <= lbQuotes.length + 20; i++) {
           patch.push({
             op: "del",
-            key: IDB.leaderboard(row.id, String(i)),
+            key: IDB_KEY.LEADERBOARD({
+              listingId: row.id,
+              rank: String(i),
+            }),
           });
         }
       }
 
       // Quote patches (only for authed users)
       for (const id of quoteDels) {
-        patch.push({ op: "del", key: IDB.myQuote(id) });
-        patch.push({ op: "del", key: IDB.privateQuote(id) });
+        patch.push({ op: "del", key: IDB_KEY.MY_QUOTE({ listingId: id }) });
+        patch.push({ op: "del", key: IDB_KEY.PRIVATE_QUOTE({ listingId: id }) });
       }
 
       for (const q of quoteRows) {
         if (userId && q.userId === userId) {
           patch.push({
             op: "put",
-            key: IDB.myQuote(q.listingId),
+            key: IDB_KEY.MY_QUOTE({ listingId: q.listingId }),
             value: {
               quoteId: q.id,
               listingId: q.listingId,
@@ -311,7 +317,10 @@ export async function handlePull(
         if (ownsListing) {
           patch.push({
             op: "put",
-            key: IDB.privateQuote(q.listingId, q.id),
+            key: IDB_KEY.PRIVATE_QUOTE({
+              listingId: q.listingId,
+              quoteId: q.id,
+            }),
             value: {
               quoteId: q.id,
               listingId: q.listingId,

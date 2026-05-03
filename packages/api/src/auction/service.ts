@@ -1,26 +1,51 @@
 /**
  * Server-side auction business logic.
- * All mutations run inside a serializable Drizzle transaction.
+ * All mutations run inside a Drizzle transaction (caller's choice of isolation).
+ *
+ * Business rules live in `./rules.ts` and are shared with the browser client.
+ * This file is only responsible for: read snapshots from DB, call the rule,
+ * write the side effects.
  */
 
 import { and, eq, ne, lt, sql, desc } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { listing, quote } from "@orys/db/schema";
 import type * as schema from "@orys/db/schema";
+import {
+  AuctionError,
+  checkListingAward,
+  checkListingEndNow,
+  checkListingPublish,
+  checkQuoteUpsert,
+  checkQuoteWithdraw,
+  type ListingSnapshot,
+  type QuoteSnapshot,
+} from "@orys/auction-core";
+
+export { AuctionError } from "@orys/auction-core";
 
 const ANTI_SNIPE_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
 const ANTI_SNIPE_EXTENSION_MS = 3 * 60 * 1000; // 3 minutes
 
 type Tx = NodePgDatabase<typeof schema>;
 
-export class AuctionError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = "AuctionError";
-  }
+function listingRowToSnapshot(
+  row: typeof listing.$inferSelect,
+): ListingSnapshot {
+  return {
+    ownerId: row.ownerId,
+    status: row.status,
+    endsAtMs: row.endsAt.getTime(),
+    minStepCents: row.minStepCents,
+  };
+}
+
+function quoteRowToSnapshot(row: typeof quote.$inferSelect): QuoteSnapshot {
+  return {
+    listingId: row.listingId,
+    userId: row.userId,
+    status: row.status,
+  };
 }
 
 /**
@@ -35,9 +60,7 @@ export async function expireListings(tx: Tx): Promise<number> {
       status: "ENDED",
       rowVersion: sql`${listing.rowVersion} + 1`,
     })
-    .where(
-      and(eq(listing.status, "LIVE"), lt(listing.endsAt, new Date())),
-    )
+    .where(and(eq(listing.status, "LIVE"), lt(listing.endsAt, new Date())))
     .returning({ id: listing.id });
 
   return result.length;
@@ -78,14 +101,10 @@ export async function listingPublish(
     .from(listing)
     .where(eq(listing.id, args.listingId));
 
-  if (!row) throw new AuctionError("NOT_FOUND", "Listing not found");
-  if (row.ownerId !== userId)
-    throw new AuctionError("FORBIDDEN", "Only owner can publish");
-  if (row.status !== "DRAFT")
-    throw new AuctionError(
-      "INVALID_STATE",
-      `Cannot publish from ${row.status}`,
-    );
+  checkListingPublish({
+    listing: row ? { ownerId: row.ownerId, status: row.status } : null,
+    userId,
+  });
 
   await tx
     .update(listing)
@@ -105,21 +124,13 @@ export async function quoteUpsert(
     amountCents: number;
   },
 ) {
-  // 1. Validate listing
+  // 1. Read listing snapshot
   const [row] = await tx
     .select()
     .from(listing)
     .where(eq(listing.id, args.listingId));
 
-  if (!row) throw new AuctionError("NOT_FOUND", "Listing not found");
-  if (row.status !== "LIVE")
-    throw new AuctionError("INVALID_STATE", "Listing is not live");
-  if (row.endsAt.getTime() < Date.now())
-    throw new AuctionError("EXPIRED", "Listing has expired");
-  if (row.ownerId === userId)
-    throw new AuctionError("SELF_BID", "Cannot bid on own listing");
-
-  // 2. Validate improvement over current best (excluding user's own bid)
+  // 2. Read best other-bidder amount (excluding the current user)
   const [bestQuote] = await tx
     .select({ amountCents: quote.amountCents })
     .from(quote)
@@ -133,17 +144,18 @@ export async function quoteUpsert(
     .orderBy(desc(quote.amountCents))
     .limit(1);
 
-  if (bestQuote) {
-    const minRequired = bestQuote.amountCents + row.minStepCents;
-    if (args.amountCents < minRequired) {
-      throw new AuctionError(
-        "BID_TOO_LOW",
-        `Bid must be at least ${minRequired} cents`,
-      );
-    }
-  }
+  // 3. Apply shared rule
+  checkQuoteUpsert({
+    listing: row ? listingRowToSnapshot(row) : null,
+    bestOtherCents: bestQuote?.amountCents ?? 0,
+    userId,
+    amountCents: args.amountCents,
+  });
 
-  // 3. Upsert (one active quote per user per listing)
+  // After this point `row` is guaranteed non-null (rule throws otherwise)
+  if (!row) throw new AuctionError("NOT_FOUND", "Listing not found");
+
+  // 4. Upsert (one active quote per user per listing)
   const [existing] = await tx
     .select()
     .from(quote)
@@ -172,8 +184,8 @@ export async function quoteUpsert(
     });
   }
 
-  // 4. Anti-snipe: extend listing if bid within threshold of end
-  //    Otherwise just bump rowVersion for card/feed updates
+  // 5. Anti-snipe: extend listing if bid within threshold of end.
+  //    Otherwise just bump rowVersion for card/feed updates.
   const timeUntilEnd = row.endsAt.getTime() - Date.now();
   if (timeUntilEnd > 0 && timeUntilEnd < ANTI_SNIPE_THRESHOLD_MS) {
     const newEndsAt = new Date(Date.now() + ANTI_SNIPE_EXTENSION_MS);
@@ -202,11 +214,10 @@ export async function quoteWithdraw(
     .from(quote)
     .where(eq(quote.id, args.quoteId));
 
-  if (!row) throw new AuctionError("NOT_FOUND", "Quote not found");
-  if (row.userId !== userId)
-    throw new AuctionError("FORBIDDEN", "Not your quote");
-  if (row.status !== "ACTIVE")
-    throw new AuctionError("INVALID_STATE", "Quote is not active");
+  checkQuoteWithdraw({
+    quote: row ? quoteRowToSnapshot(row) : null,
+    userId,
+  });
 
   await tx
     .update(quote)
@@ -233,11 +244,10 @@ export async function listingEndNow(
     .from(listing)
     .where(eq(listing.id, args.listingId));
 
-  if (!row) throw new AuctionError("NOT_FOUND", "Listing not found");
-  if (row.ownerId !== userId)
-    throw new AuctionError("FORBIDDEN", "Only owner can end");
-  if (row.status !== "LIVE")
-    throw new AuctionError("INVALID_STATE", `Cannot end from ${row.status}`);
+  checkListingEndNow({
+    listing: row ? { ownerId: row.ownerId, status: row.status } : null,
+    userId,
+  });
 
   await tx
     .update(listing)
@@ -259,25 +269,17 @@ export async function listingAward(
     .from(listing)
     .where(eq(listing.id, args.listingId));
 
-  if (!row) throw new AuctionError("NOT_FOUND", "Listing not found");
-  if (row.ownerId !== userId)
-    throw new AuctionError("FORBIDDEN", "Only owner can award");
-  if (row.status !== "ENDED")
-    throw new AuctionError(
-      "INVALID_STATE",
-      `Cannot award from ${row.status}`,
-    );
-
   const [q] = await tx
     .select()
     .from(quote)
     .where(eq(quote.id, args.quoteId));
 
-  if (!q) throw new AuctionError("NOT_FOUND", "Quote not found");
-  if (q.listingId !== args.listingId)
-    throw new AuctionError("INVALID_STATE", "Quote is for different listing");
-  if (q.status !== "ACTIVE")
-    throw new AuctionError("INVALID_STATE", "Quote is not active");
+  checkListingAward({
+    listing: row ? { ownerId: row.ownerId, status: row.status } : null,
+    quote: q ? quoteRowToSnapshot(q) : null,
+    listingId: args.listingId,
+    userId,
+  });
 
   await tx
     .update(listing)

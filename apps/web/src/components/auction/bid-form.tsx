@@ -62,13 +62,23 @@ export function BidForm({
     if (!rep) return;
     const amountCents = Math.round(Number.parseFloat(values.amount) * 100);
 
-    await rep.mutate.quoteUpsert({
-      listingId,
-      quoteId: crypto.randomUUID(),
-      amountCents,
-    });
-
-    form.reset();
+    try {
+      await rep.mutate.quoteUpsert({
+        listingId,
+        quoteId: crypto.randomUUID(),
+        amountCents,
+      });
+      form.reset();
+    } catch (err) {
+      // Client mutator threw — same business rules as the server. Surface the
+      // message inline instead of letting the optimistic update flicker and
+      // then revert on the next pull.
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: unknown }).message)
+          : "Could not place bid";
+      form.setError("amount", { type: "manual", message });
+    }
   }
 
   return (

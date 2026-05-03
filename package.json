@@ -31,6 +31,10 @@
     "db:studio": "turbo -F @orys/db db:studio",
     "db:generate": "turbo -F @orys/db db:generate",
     "db:migrate": "turbo -F @orys/db db:migrate",
+    "bots:seed": "bun run --cwd apps/bots seed",
+    "bots:bid": "bun run --cwd apps/bots bid",
+    "bots:viewers": "bun run --cwd apps/bots viewers",
+    "bots:verify": "bun run --cwd apps/bots verify",
     "check": "oxlint && oxfmt --write"
   },
   "dependencies": {

@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { authClient } from "../lib/auth-client";
 import { ReplicacheProvider, useRep } from "../lib/replicache/provider";
-import { useScan } from "../lib/replicache/hooks";
-import { ListingCard, type CardDoc } from "../components/auction/listing-card";
+import { useSubscribe } from "../lib/replicache/hooks";
+import { ListingManager, type CardDoc } from "../lib/auction/managers";
+import { ListingCard } from "../components/auction/listing-card";
 import { CreateListingForm } from "../components/auction/create-listing-form";
 import { Header } from "../components/layout/header";
 import { Footer } from "../components/layout/footer";
@@ -19,7 +20,7 @@ const STATUS_OPTIONS = ["DRAFT", "LIVE", "ENDED", "AWARDED"];
 
 function HomeFeed({ userId }: { userId: string | null }) {
   const rep = useRep();
-  const cards = useScan<CardDoc>("card/");
+  const cards = useSubscribe<CardDoc[]>((tx) => ListingManager.scanCards(tx), []);
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [sort, setSort] = useState<{ field: string; direction: "asc" | "desc" }>({

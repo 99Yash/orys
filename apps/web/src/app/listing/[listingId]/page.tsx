@@ -5,6 +5,12 @@ import Link from "next/link";
 import { authClient } from "../../../lib/auth-client";
 import { ReplicacheProvider, useRep } from "../../../lib/replicache/provider";
 import { useSubscribe } from "../../../lib/replicache/hooks";
+import {
+  ListingManager,
+  QuoteManager,
+  type ListingDoc,
+  type MyQuoteDoc,
+} from "../../../lib/auction/managers";
 import { Countdown } from "../../../components/auction/countdown";
 import { BidForm } from "../../../components/auction/bid-form";
 import { Leaderboard } from "../../../components/auction/leaderboard";
@@ -18,28 +24,6 @@ import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { formatCents } from "../../../lib/utils";
 import * as ws from "../../../lib/realtime/socket";
-
-type ListingDoc = {
-  id: string;
-  title: string;
-  description: string | null;
-  status: string;
-  bestAmountCents: number;
-  quoteCount: number;
-  endsAt: string;
-  minStepCents: number;
-  currency: string;
-  ownerId: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type MyQuoteDoc = {
-  quoteId: string;
-  listingId: string;
-  amountCents: number;
-  status: string;
-};
 
 function LoadingSkeleton() {
   return (
@@ -74,16 +58,14 @@ function ListingDetail({
   const rep = useRep();
 
   const listing = useSubscribe<ListingDoc | null>(
-    async (tx) => (await tx.get(`listing/${listingId}`)) as ListingDoc | null,
+    async (tx) => (await ListingManager.getDetail(tx, listingId)) ?? null,
     null,
     [listingId],
   );
 
   const myQuote = useSubscribe<MyQuoteDoc | null>(
     async (tx) =>
-      userId
-        ? ((await tx.get(`my-quote/${listingId}`)) as MyQuoteDoc | null)
-        : null,
+      userId ? ((await QuoteManager.getMyQuote(tx, listingId)) ?? null) : null,
     null,
     [listingId, userId],
   );

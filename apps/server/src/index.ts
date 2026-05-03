@@ -10,7 +10,11 @@ const server = new Elysia()
     cors({
       origin: env.CORS_ORIGIN,
       methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-Replicache-RequestID",
+      ],
       credentials: true,
     }),
   )

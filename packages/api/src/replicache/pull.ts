@@ -19,7 +19,7 @@ import {
   getDelsSince,
 } from "./cvr";
 import * as cvrCache from "./cache";
-import { IDB } from "./idb-keys";
+import { IDB_KEY } from "@orys/auction-core";
 import { expireListings } from "../auction/service";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as schema from "@orys/db/schema";
@@ -135,11 +135,19 @@ export async function handlePull(
 
       // 3. Quotes: only for authenticated users
       const ownedListingIds = listingsMeta.map((l) => l.id);
-      let quotesMeta: { id: string; rowVersion: number }[] = [];
+      let quotesMeta: {
+        id: string;
+        rowVersion: number;
+        listingId: string;
+      }[] = [];
 
       if (userId && ownedListingIds.length > 0) {
         quotesMeta = await tx
-          .select({ id: quote.id, rowVersion: quote.rowVersion })
+          .select({
+            id: quote.id,
+            rowVersion: quote.rowVersion,
+            listingId: quote.listingId,
+          })
           .from(quote)
           .where(
             or(
@@ -167,7 +175,6 @@ export async function handlePull(
       const listingPuts = getPutsSince(nextCVR.listings, baseCVR.listings);
       const listingDels = getDelsSince(nextCVR.listings, baseCVR.listings);
       const quotePuts = getPutsSince(nextCVR.quotes, baseCVR.quotes);
-      const quoteDels = getDelsSince(nextCVR.quotes, baseCVR.quotes);
       const clientPuts = getPutsSince(nextCVR.clients, baseCVR.clients);
 
       // 6. Fetch full data for puts
@@ -237,20 +244,20 @@ export async function handlePull(
       }
 
       for (const id of listingDels) {
-        patch.push({ op: "del", key: IDB.card(id) });
-        patch.push({ op: "del", key: IDB.listing(id) });
+        patch.push({ op: "del", key: IDB_KEY.CARD({ listingId: id }) });
+        patch.push({ op: "del", key: IDB_KEY.LISTING({ listingId: id }) });
       }
 
       for (const row of listingRows) {
         const stats = quoteStatsMap.get(row.id) ?? defaultStats;
         patch.push({
           op: "put",
-          key: IDB.card(row.id),
+          key: IDB_KEY.CARD({ listingId: row.id }),
           value: buildCardDoc(row, stats),
         });
         patch.push({
           op: "put",
-          key: IDB.listing(row.id),
+          key: IDB_KEY.LISTING({ listingId: row.id }),
           value: buildListingDoc(row, stats),
         });
 
@@ -267,7 +274,10 @@ export async function handlePull(
         for (let i = 0; i < lbQuotes.length; i++) {
           patch.push({
             op: "put",
-            key: IDB.leaderboard(row.id, String(i + 1)),
+            key: IDB_KEY.LEADERBOARD({
+              listingId: row.id,
+              rank: String(i + 1),
+            }),
             value: buildLeaderboardDoc(lbQuotes[i]!, i + 1, isOwner),
           });
         }
@@ -277,22 +287,35 @@ export async function handlePull(
         for (let i = lbQuotes.length + 1; i <= lbQuotes.length + 20; i++) {
           patch.push({
             op: "del",
-            key: IDB.leaderboard(row.id, String(i)),
+            key: IDB_KEY.LEADERBOARD({
+              listingId: row.id,
+              rank: String(i),
+            }),
           });
         }
       }
 
-      // Quote patches (only for authed users)
-      for (const id of quoteDels) {
-        patch.push({ op: "del", key: IDB.myQuote(id) });
-        patch.push({ op: "del", key: IDB.privateQuote(id) });
+      // Quote dels: CVR is keyed by quote.id, but the doc keys we need to
+      // delete depend on listingId (and quoteId for PRIVATE_QUOTE).
+      // Recover listingId from the prev CVR metadata. Replicache treats del
+      // on missing keys as a no-op, so emitting both visibility variants is
+      // safe regardless of which one the client actually had.
+      for (const [quoteId, prevMeta] of baseCVR.quotes) {
+        if (nextCVR.quotes.has(quoteId)) continue;
+        const listingId = prevMeta.listingId;
+        if (!listingId) continue;
+        patch.push({ op: "del", key: IDB_KEY.MY_QUOTE({ listingId }) });
+        patch.push({
+          op: "del",
+          key: IDB_KEY.PRIVATE_QUOTE({ listingId, quoteId }),
+        });
       }
 
       for (const q of quoteRows) {
         if (userId && q.userId === userId) {
           patch.push({
             op: "put",
-            key: IDB.myQuote(q.listingId),
+            key: IDB_KEY.MY_QUOTE({ listingId: q.listingId }),
             value: {
               quoteId: q.id,
               listingId: q.listingId,
@@ -311,7 +334,10 @@ export async function handlePull(
         if (ownsListing) {
           patch.push({
             op: "put",
-            key: IDB.privateQuote(q.listingId, q.id),
+            key: IDB_KEY.PRIVATE_QUOTE({
+              listingId: q.listingId,
+              quoteId: q.id,
+            }),
             value: {
               quoteId: q.id,
               listingId: q.listingId,

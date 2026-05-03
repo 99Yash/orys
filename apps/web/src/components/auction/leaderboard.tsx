@@ -1,18 +1,13 @@
 "use client";
 
-import { useScan } from "~/lib/replicache/hooks";
+import { useSubscribe } from "~/lib/replicache/hooks";
 import { useRep } from "~/lib/replicache/provider";
+import {
+  QuoteManager,
+  type LeaderboardDoc as LeaderboardEntry,
+} from "~/lib/auction/managers";
 import { cn, formatCents } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
-
-type LeaderboardEntry = {
-  rank: number;
-  amountCents: number;
-  status: string;
-  userId?: string;
-  quoteId?: string;
-  createdAt: string;
-};
 
 const rankStyles = [
   "bg-amber-50 text-amber-700 ring-1 ring-amber-400/30",
@@ -63,8 +58,9 @@ export function Leaderboard({
   userId?: string | null;
 }) {
   const rep = useRep();
-  const entries = useScan<LeaderboardEntry>(
-    `leaderboard/${listingId}/`,
+  const entries = useSubscribe<LeaderboardEntry[]>(
+    (tx) => QuoteManager.scanLeaderboard(tx, listingId),
+    [],
     [listingId],
   );
 

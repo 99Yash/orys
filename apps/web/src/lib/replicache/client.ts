@@ -2,7 +2,7 @@
 
 import { Replicache } from "replicache";
 import { env } from "@orys/env/client";
-import { auctionMutators } from "../auction/mutators";
+import { makeAuctionMutators } from "../auction/mutators";
 
 let repInstance: Replicache | null = null;
 let currentName: string | null = null;
@@ -26,7 +26,7 @@ export function getReplicache(userId: string | null): Replicache {
 
   const rep = new Replicache({
     name,
-    mutators: auctionMutators,
+    mutators: makeAuctionMutators(userId),
     schemaVersion: "1",
     pushURL: `${serverUrl}/api/replicache/push`,
     pullURL: `${serverUrl}/api/replicache/pull`,

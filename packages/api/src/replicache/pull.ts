@@ -135,11 +135,19 @@ export async function handlePull(
 
       // 3. Quotes: only for authenticated users
       const ownedListingIds = listingsMeta.map((l) => l.id);
-      let quotesMeta: { id: string; rowVersion: number }[] = [];
+      let quotesMeta: {
+        id: string;
+        rowVersion: number;
+        listingId: string;
+      }[] = [];
 
       if (userId && ownedListingIds.length > 0) {
         quotesMeta = await tx
-          .select({ id: quote.id, rowVersion: quote.rowVersion })
+          .select({
+            id: quote.id,
+            rowVersion: quote.rowVersion,
+            listingId: quote.listingId,
+          })
           .from(quote)
           .where(
             or(
@@ -167,7 +175,6 @@ export async function handlePull(
       const listingPuts = getPutsSince(nextCVR.listings, baseCVR.listings);
       const listingDels = getDelsSince(nextCVR.listings, baseCVR.listings);
       const quotePuts = getPutsSince(nextCVR.quotes, baseCVR.quotes);
-      const quoteDels = getDelsSince(nextCVR.quotes, baseCVR.quotes);
       const clientPuts = getPutsSince(nextCVR.clients, baseCVR.clients);
 
       // 6. Fetch full data for puts
@@ -288,10 +295,20 @@ export async function handlePull(
         }
       }
 
-      // Quote patches (only for authed users)
-      for (const id of quoteDels) {
-        patch.push({ op: "del", key: IDB_KEY.MY_QUOTE({ listingId: id }) });
-        patch.push({ op: "del", key: IDB_KEY.PRIVATE_QUOTE({ listingId: id }) });
+      // Quote dels: CVR is keyed by quote.id, but the doc keys we need to
+      // delete depend on listingId (and quoteId for PRIVATE_QUOTE).
+      // Recover listingId from the prev CVR metadata. Replicache treats del
+      // on missing keys as a no-op, so emitting both visibility variants is
+      // safe regardless of which one the client actually had.
+      for (const [quoteId, prevMeta] of baseCVR.quotes) {
+        if (nextCVR.quotes.has(quoteId)) continue;
+        const listingId = prevMeta.listingId;
+        if (!listingId) continue;
+        patch.push({ op: "del", key: IDB_KEY.MY_QUOTE({ listingId }) });
+        patch.push({
+          op: "del",
+          key: IDB_KEY.PRIVATE_QUOTE({ listingId, quoteId }),
+        });
       }
 
       for (const q of quoteRows) {

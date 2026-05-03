@@ -7,14 +7,19 @@
  *   - bot harness (`apps/bots/src/lib/listing.ts`)
  *
  * Pattern (matches replicache-cvr's `IDB_KEY` shape): named-arg form, default
- * empty string for missing fields. Calling with no args yields the prefix
- * key, suitable for `tx.scan({ prefix })`.
+ * empty string for missing fields.
  *
- *   IDB_KEY.CARD({ listingId: "abc" })  // "card/abc"
- *   IDB_KEY.CARD()                       // "card/"
+ *   IDB_KEY.CARD({ listingId: "abc" })             // "card/abc"
+ *   IDB_KEY.LEADERBOARD({ listingId: "abc" })       // "leaderboard/abc/"
+ *   IDB_KEY.PRIVATE_QUOTE({ listingId: "abc" })     // "private-quote/abc/"
  *
- * `filter((p) => p !== undefined)` (not `filter(Boolean)`) preserves the
- * trailing empty segment so prefix scans get the trailing slash.
+ * For prefix scans (`tx.scan({ prefix })`), pass the highest-level segments
+ * you want to fix. Omitting trailing segments yields the right prefix with
+ * a trailing slash. Do NOT call with no args for multi-segment families —
+ * `LEADERBOARD()` gives `"leaderboard//"`, which won't match real keys.
+ *
+ * `filter((p) => p !== undefined)` (not `filter(Boolean)`) preserves an
+ * empty trailing segment so a single missing field still yields a slash.
  */
 
 function constructKey(parts: (string | undefined)[]): string {

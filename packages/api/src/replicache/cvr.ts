@@ -3,10 +3,19 @@
  * Used to compute minimal diffs between pulls.
  */
 
-export type ClientViewMetadata = { rowVersion: number };
+export type ClientViewMetadata = {
+  rowVersion: number;
+  // Present for quote rows so del-time key construction can recover the
+  // listingId from the prior CVR (the CVR is keyed by quote.id).
+  listingId?: string;
+};
 export type ClientViewMap = Map<string, ClientViewMetadata>;
 
-export type SearchResult = { id: string; rowVersion: number };
+export type SearchResult = {
+  id: string;
+  rowVersion: number;
+  listingId?: string;
+};
 
 export interface CVRSnapshot {
   clients: ClientViewMap;
@@ -19,7 +28,9 @@ export function serializeSearchResult(
 ): ClientViewMap {
   const map = new Map<string, ClientViewMetadata>();
   for (const row of results) {
-    map.set(row.id, { rowVersion: row.rowVersion });
+    const meta: ClientViewMetadata = { rowVersion: row.rowVersion };
+    if (row.listingId !== undefined) meta.listingId = row.listingId;
+    map.set(row.id, meta);
   }
   return map;
 }

@@ -4,14 +4,8 @@ import { env } from "@orys/env/server";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
-type Auth = ReturnType<typeof betterAuth>;
-
-let _auth: Auth | undefined;
-
-export function auth(): Auth {
-  if (_auth) return _auth;
-
-  _auth = betterAuth({
+function createAuth() {
+  return betterAuth({
     database: drizzleAdapter(db, {
       provider: "pg",
       schema,
@@ -40,6 +34,14 @@ export function auth(): Auth {
       },
     },
   });
+}
 
+type Auth = ReturnType<typeof createAuth>;
+
+let _auth: Auth | undefined;
+
+export function auth(): Auth {
+  if (_auth) return _auth;
+  _auth = createAuth();
   return _auth;
 }
